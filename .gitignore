@@ -3,6 +3,9 @@ data/aetherpress.db
 coverage/
 data/*.db
 
+# Local server test DB (keep out of commits)
+server/data/your-database-name.db
+
 # Generated content and samples
 samples/images/
 samples/*.pdf
