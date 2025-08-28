@@ -26,3 +26,4 @@ shared/dist/vitest.config.*
 # Next.js build output
 .next/
 /package-lock.json
+tmp/
