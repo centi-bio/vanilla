@@ -27,6 +27,7 @@ async function generatePdfBuffer({
   title,
   body,
   browser: providedBrowser,
+  validate = false,
 } = {}) {
   let browser;
   let page;
@@ -47,6 +48,26 @@ async function generatePdfBuffer({
     const buffer = await page.pdf({ format: "A4", printBackground: true });
     if (page && launched) await page.close();
     if (launched && browser) await browser.close();
+
+    if (validate) {
+      // Run non-fatal validation and return both buffer and validation summary.
+      try {
+        const validation = await validatePdfBuffer(buffer);
+        // Do not throw on warnings — return an object with both buffer and validation.
+        return { buffer, validation };
+      } catch (valErr) {
+        // If validation fails catastrophically, surface a warning but still return buffer.
+        return {
+          buffer,
+          validation: {
+            ok: false,
+            errors: ["validation-failed", valErr.message],
+            warnings: [],
+          },
+        };
+      }
+    }
+
     return buffer;
   } catch (e) {
     if (page && launched)
