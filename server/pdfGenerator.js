@@ -34,10 +34,38 @@ async function generatePdfBuffer({
   let launched = false;
   try {
     if (!providedBrowser) {
-      browser = await puppeteer.launch({
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
-      });
-      launched = true;
+      // Prefer an explicit Chrome/Chromium path when using puppeteer-core or CI.
+      const execPath =
+        process.env.CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
+      const baseArgs = ["--no-sandbox", "--disable-dev-shm-usage"];
+
+      const launchOptions = {
+        args: baseArgs,
+        // let caller override default timeout via env (ms)
+        timeout: Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 30000,
+      };
+      if (execPath) launchOptions.executablePath = execPath;
+
+      // Retry a couple times for flaky CI/launcher issues
+      const maxAttempts = 2;
+      let lastErr;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          browser = await puppeteer.launch(launchOptions);
+          launched = true;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          // small backoff
+          await new Promise((r) => setTimeout(r, attempt * 250));
+        }
+      }
+      if (!browser && lastErr) {
+        throw new Error(
+          `Puppeteer launch failed after ${maxAttempts} attempts: ${lastErr.message}`
+        );
+      }
     } else {
       browser = providedBrowser;
     }
