@@ -74,7 +74,25 @@ async function startServer(options = {}) {
     serviceState.db.startupPhase = "ready";
     console.log("Database initialized successfully");
 
+    // 1.a PRISMA VALIDATION: Ensure @prisma/client is available
+    // This catches the "module cache stale after prisma generate" issue early
+    try {
+      const { getPrisma } = require("./utils/resultDb");
+      getPrisma(); // Eagerly test Prisma initialization
+      console.log("[Prisma] Client available and initialized successfully");
+    } catch (prismaErr) {
+      console.error(
+        "[Prisma] INITIALIZATION FAILED - Server startup blocked:",
+        prismaErr.message
+      );
+      console.error(
+        "[Prisma] RECOVERY: Run `npx --prefix server prisma generate` and restart the server"
+      );
+      throw prismaErr;
+    }
+
     // 1.b DEPRECATED: Legacy jobs DB initialization removed
+
     // Phase cleanup: jobsModule and old export queue replaced by Phase 3/4 architecture
     // Old endpoints: /api/export/job, /api/export/job/:id removed
     // Use new endpoints: /api/export/generate, /api/export/status/:jobId, /api/export/download/:jobId

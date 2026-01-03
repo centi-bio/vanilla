@@ -19,7 +19,9 @@
     "test:run": "FORCE_MOCK_AI=1 vitest run",
     "test:watch": "FORCE_MOCK_AI=1 vitest",
     "test:ci": "FORCE_MOCK_AI=1 vitest run --coverage",
-    "e2e:smoke": "node ./scripts/e2e-smoke.js"
+    "e2e:smoke": "node ./scripts/e2e-smoke.js",
+    "prisma:regen": "npx prisma generate && npm run prisma:restart",
+    "prisma:restart": "pkill -f 'node.*index.js' || true"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

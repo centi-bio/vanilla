@@ -11,17 +11,42 @@
  */
 
 let prisma = null;
+let prismaInitializationError = null;
 
 /**
  * Lazy-initialize Prisma Client
- * This allows tests to mock the client before it's instantiated
+ * This allows tests to mock the client before it's instantiated.
+ * If initialization fails, cache the error so we fail fast on all subsequent calls.
  */
 function getPrisma() {
+  // If we already failed to initialize, throw cached error (fail fast)
+  if (prismaInitializationError) {
+    throw prismaInitializationError;
+  }
+
   if (prisma) return prisma;
 
-  const { PrismaClient } = require("@prisma/client");
-  prisma = new PrismaClient();
-  return prisma;
+  try {
+    const { PrismaClient } = require("@prisma/client");
+    prisma = new PrismaClient();
+    return prisma;
+  } catch (error) {
+    // Cache the error so subsequent calls fail fast instead of retrying
+    prismaInitializationError = new Error(
+      `Prisma initialization failed: ${error.message}\n` +
+        'Make sure to run "npx prisma generate" and restart the server (kill & restart node process).\n' +
+        "If you just ran prisma generate, the running server process has a stale module cache. Restart it."
+    );
+    throw prismaInitializationError;
+  }
+}
+
+/**
+ * Reset Prisma initialization state (used for testing or manual recovery)
+ */
+function resetPrisma() {
+  prisma = null;
+  prismaInitializationError = null;
 }
 
 async function saveResult(resultId, outEnvelope, mode, promptId = null) {
@@ -322,4 +347,7 @@ module.exports = {
   getExportJobStats,
   getExportJobsByStatus,
   markJobsAsExpired,
+  // Test/debug helpers
+  resetPrisma,
+  getPrisma,
 };
