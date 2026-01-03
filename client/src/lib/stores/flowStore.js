@@ -88,14 +88,15 @@ function createFlowStore() {
 
         // Validate transition
         if (!VALID_TRANSITIONS[currentState]?.includes(newState)) {
-          console.warn(
-            `Invalid state transition: ${currentState} → ${newState}. Allowed: ${VALID_TRANSITIONS[
+          console.error(
+            `❌ BLOCKED: Invalid state transition: ${currentState} → ${newState}. Allowed: ${VALID_TRANSITIONS[
               currentState
             ]?.join(", ")}`
           );
           return store;
         }
 
+        console.debug(`✅ State transition: ${currentState} → ${newState}`);
         return { ...store, state: newState };
       });
     },
@@ -186,6 +187,51 @@ function createFlowStore() {
      */
     setResultId(id) {
       update((store) => ({ ...store, resultId: id }));
+    },
+
+    /**
+     * Start classifying state
+     */
+    startClassifying() {
+      this.setState(STATES.GENERATING);
+    },
+
+    /**
+     * Finish classifying and transition to appropriate state
+     */
+    finishClassifying() {
+      // This method should be called after classification completes
+      // The actual transition logic is handled in the component
+    },
+
+    /**
+     * Start generating state
+     */
+    startGenerating() {
+      this.setState(STATES.GENERATING);
+    },
+
+    /**
+     * Finish generating - this should transition to POLLING if async
+     */
+    finishGenerating() {
+      // This method should be called after getting 202 response
+      // The actual transition to POLLING happens in the component
+    },
+
+    /**
+     * Start overriding state
+     */
+    startOverriding() {
+      this.setState(STATES.OVERRIDE_ACTIVE);
+    },
+
+    /**
+     * Transition to a new state with validation
+     * @param {string} newState - Target state
+     */
+    transitionTo(newState) {
+      this.setState(newState);
     },
 
     /**

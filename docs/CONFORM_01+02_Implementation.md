@@ -4,6 +4,7 @@
 **Branch**: `feat/conform-01+02-unified`
 
 **Focus**: Specific code changes to fix frontend polling
+**New Branch**: `feat/conform-01+02-fix` (to be created from `feat/conform-01+02-unified`)  
 **Reference**: 📑 Comments target proposed fixes, `CONFORM_01+02_Fix.md`
 
 ---

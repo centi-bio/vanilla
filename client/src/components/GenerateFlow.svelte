@@ -116,8 +116,9 @@
       // All responses from /api/generate are now 202 Accepted with resultId
       // Frontend always polls for completion regardless of sync/async execution
       if (genResult.resultId) {
-        // Job submitted for processing - start polling
-        flowStore.finishGenerating();
+        // Job submitted for processing - transition to POLLING state
+        flowStore.setResultId(genResult.resultId);
+        flowStore.transitionTo("POLLING");
         // Start polling in background (don't await - let it run independently)
         pollUntilComplete(genResult.resultId);
         return;

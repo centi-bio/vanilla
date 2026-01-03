@@ -1,6 +1,7 @@
 <script lang="ts">
   import { contentStore, uiStateStore } from '../stores';
   import { exportToPdf } from '../lib/api';
+  import { flowStore } from '../stores/flowStore';
 
   let content: object | null;
   contentStore.subscribe(value => {
@@ -63,7 +64,7 @@
   };
 </script>
 
-{#if content}
+{#if $flowStore.state === 'RESULT_READY'}
   <div class="export-container">
     <div class="actions-row">
       <button
