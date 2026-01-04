@@ -1,7 +1,7 @@
 <script lang="ts">
   import { contentStore, uiStateStore } from '../stores';
   import { exportToPdf } from '../lib/api';
-  import { flowStore } from '../stores/flowStore';
+  import { flowStore } from '../lib/stores/flowStore.js';
 
   let content: object | null;
   contentStore.subscribe(value => {
