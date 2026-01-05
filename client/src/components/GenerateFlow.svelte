@@ -15,6 +15,7 @@
   import { onMount } from "svelte";
   import { flowStore, flowProgress } from "../lib/stores/flowStore.js";
   import { classify, generate, applyOverride, getStatus, getResult } from "../lib/api";
+  import SmartPoller from "../lib/SmartPoller.js";
 
   // Import child components
   import MediaSelector from "./MediaSelector.svelte";
@@ -205,12 +206,25 @@
    * Called with 202 Accepted response containing resultId
    */
   async function pollUntilComplete(resultId) {
-    const MAX_ATTEMPTS = 600; // 20 minutes with 2s interval
-    const POLL_INTERVAL_MS = 2000;
+    const MAX_ATTEMPTS = 600; // 20 minutes with varying intervals
     const PROGRESS_TIMEOUT_MS = 60000; // 1 minute timeout per poll
+    const MAX_TOTAL_TIME_MS = 20 * 60 * 1000; // 20 minute hard limit
+
+    // ✅ NEW: Create SmartPoller instance for adaptive intervals
+    const smartPoller = new SmartPoller({
+      highEtaThreshold: 30,
+      mediumEtaThreshold: 15,
+      lowEtaThreshold: 5,
+      enableInitialWait: true,
+      initialWaitFactor: 0.8,
+    });
 
     flowStore.setState("POLLING");
     flowStore.setResultId(resultId);
+
+    const pollingStartTime = Date.now();
+    let initialWaitApplied = false;
+    let currentEta = null;
 
     try {
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -225,6 +239,42 @@
           );
 
           const status = await Promise.race([statusPromise, timeoutPromise]);
+
+          // ✅ NEW: Handle initial wait phase (only on first successful poll)
+          if (!initialWaitApplied && status.eta) {
+            const waitDurationMs = smartPoller.getInitialWaitDuration(
+              status.eta
+            );
+            if (waitDurationMs) {
+              console.log(
+                `[SmartPoller] Waiting ${smartPoller.getIntervalDescription(
+                  waitDurationMs
+                )} before first poll (80% of ETA: ${status.eta}s)`
+              );
+
+              flowStore.updateProgress({
+                status: "waiting",
+                message: `Waiting ${smartPoller.getIntervalDescription(
+                  waitDurationMs
+                )} before polling...`,
+                progress_percent: 5,
+                eta: status.eta,
+              });
+
+              // Wait before starting polls
+              await new Promise((resolve) =>
+                setTimeout(resolve, waitDurationMs)
+              );
+
+              smartPoller.startPolling();
+            }
+            initialWaitApplied = true;
+          }
+
+          // Store current ETA for interval calculation
+          if (status.eta) {
+            currentEta = status.eta;
+          }
 
           // Update progress in store
           flowStore.updateProgress({
@@ -241,13 +291,30 @@
             const result = await getResult(resultId);
             flowStore.setResult(result.content || result.out_envelope);
             flowStore.transitionTo("RESULT_READY");
+            console.log(
+              `[SmartPoller] Job complete after ${attempt + 1} polls`
+            );
             return;
           }
 
-          // Wait before next poll
-          await new Promise((resolve) =>
-            setTimeout(resolve, POLL_INTERVAL_MS)
+          // ✅ NEW: Adjust adaptive interval based on current ETA
+          let pollIntervalMs = smartPoller.adjustInterval(currentEta || 30);
+
+          // Safety check: ensure we don't exceed total time limit
+          const elapsedMs = Date.now() - pollingStartTime;
+          if (elapsedMs + pollIntervalMs > MAX_TOTAL_TIME_MS) {
+            // Would exceed limit, use shorter interval
+            pollIntervalMs = Math.max(500, MAX_TOTAL_TIME_MS - elapsedMs);
+          }
+
+          // Log interval for debugging (comment out in production if noisy)
+          console.debug(
+            `[SmartPoller] Poll ${attempt + 1}: ETA=${currentEta}s, ` +
+              `Interval=${smartPoller.getIntervalDescription(pollIntervalMs)}`
           );
+
+          // ✅ CHANGED: Use calculated interval instead of hardcoded
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         } catch (pollErr) {
           console.warn(`Poll attempt ${attempt + 1} failed:`, pollErr.message);
 
@@ -258,8 +325,19 @@
             pollErr.status >= 500
           ) {
             if (attempt < MAX_ATTEMPTS - 1) {
+              // Use adaptive interval even for retries
+              const retryIntervalMs = currentEta
+                ? smartPoller.adjustInterval(currentEta)
+                : 2000;
+
+              console.log(
+                `[SmartPoller] Retrying in ${smartPoller.getIntervalDescription(
+                  retryIntervalMs
+                )}`
+              );
+
               await new Promise((resolve) =>
-                setTimeout(resolve, POLL_INTERVAL_MS)
+                setTimeout(resolve, retryIntervalMs)
               );
               continue;
             }
@@ -271,12 +349,12 @@
 
       // Max attempts reached
       throw new Error(
-        `Polling timeout after ${MAX_ATTEMPTS} attempts (${(MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000 / 60} minutes)`
+        `Polling timeout after ${MAX_ATTEMPTS} attempts (${(MAX_ATTEMPTS * 2000) / 1000 / 60} minutes)`
       );
     } catch (err) {
       flowStore.setError(err);
       flowStore.transitionTo("ERROR");
-      console.error("Polling error:", err);
+      console.error("[SmartPoller] Polling error:", err);
     }
   }
 

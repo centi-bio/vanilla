@@ -72,6 +72,15 @@ function createFlowStore() {
     currentEta: null,
     calls_completed: 0,
     calls_total: 0,
+    // ✅ NEW: Polling configuration for adaptive polling
+    pollingConfig: {
+      initialEta: null, // Initial ETA from first status poll
+      waitingForInitialPhase: false, // Currently in wait phase
+      currentPollInterval: 2000, // Current interval (for monitoring)
+      pollStartedAt: null, // When polling began
+      totalPolls: 0, // Number of polls completed
+      adaptivePollingEnabled: true, // Whether adaptive polling is active
+    },
   });
 
   return {
@@ -254,7 +263,88 @@ function createFlowStore() {
         currentEta: null,
         calls_completed: 0,
         calls_total: 0,
+        // ✅ Reset polling config as well
+        pollingConfig: {
+          initialEta: null,
+          waitingForInitialPhase: false,
+          currentPollInterval: 2000,
+          pollStartedAt: null,
+          totalPolls: 0,
+          adaptivePollingEnabled: true,
+        },
       });
+    },
+
+    /**
+     * ✅ NEW: Update polling configuration
+     * @param {Object} config - Polling config object
+     */
+    setPollingConfig(config) {
+      update((store) => ({
+        ...store,
+        pollingConfig: {
+          ...store.pollingConfig,
+          ...config,
+        },
+      }));
+    },
+
+    /**
+     * ✅ NEW: Set initial ETA (from first status poll)
+     * @param {number} eta - Initial ETA in seconds
+     */
+    setInitialEta(eta) {
+      update((store) => ({
+        ...store,
+        pollingConfig: {
+          ...store.pollingConfig,
+          initialEta: eta,
+        },
+      }));
+    },
+
+    /**
+     * ✅ NEW: Update current polling interval
+     * @param {number} intervalMs - Current interval in milliseconds
+     */
+    updateCurrentPollInterval(intervalMs) {
+      update((store) => ({
+        ...store,
+        pollingConfig: {
+          ...store.pollingConfig,
+          currentPollInterval: intervalMs,
+        },
+      }));
+    },
+
+    /**
+     * ✅ NEW: Increment total poll count
+     */
+    incrementPollCount() {
+      update((store) => ({
+        ...store,
+        pollingConfig: {
+          ...store.pollingConfig,
+          totalPolls: (store.pollingConfig.totalPolls || 0) + 1,
+        },
+      }));
+    },
+
+    /**
+     * ✅ NEW: Reset polling configuration for new job
+     */
+    resetPollingConfig() {
+      update((store) => ({
+        ...store,
+        pollingConfig: {
+          initialEta: null,
+          waitingForInitialPhase: false,
+          currentPollInterval: 2000,
+          pollStartedAt: null,
+          totalPolls: 0,
+          adaptivePollingEnabled: true,
+        },
+      }));
     },
   };
 }
