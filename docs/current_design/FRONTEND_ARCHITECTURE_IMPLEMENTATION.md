@@ -1,6 +1,6 @@
 # Frontend Architecture Implementation: Adaptive Polling
 
-**Date**: January 5, 2026  @ 10:50AM
+**Date**: January 5, 2026 @ 10:50AM
 **Branch**: `feat/conform-01+02-fix`
 
 **Purpose**: Technical specification for implementing adaptive polling intelligence  
@@ -8,6 +8,7 @@
 **Reading Time**: ~20 minutes
 
 **Related Documents**:
+
 - [FRONTEND_ARCHITECTURE_ADJUST.md](FRONTEND_ARCHITECTURE_ADJUST.md) - Structural changes needed
 - [FRONTEND_ARCHITECTURE_SPEC_VS_IMPLEMENTATION.md](FRONTEND_ARCHITECTURE_SPEC_VS_IMPLEMENTATION.md) - Gap analysis
 - [ARCHITECTURE_IMPLEMENTATION_GUIDE.md](../ARCHITECTURE_IMPLEMENTATION_GUIDE.md) - Backend context
@@ -30,19 +31,20 @@
 ### What We're Building
 
 A **SmartPoller** utility that calculates dynamic polling intervals based on job ETA, enabling:
+
 - Efficient polling during long jobs (low frequency)
 - Responsive polling near completion (high frequency)
 - Initial wait phase to reduce early-stage load
 
 ### Implementation Scope
 
-|      Component        |  Effort  |  Risk  | Priority |
-|-----------------------|----------|--------|----------|
-| SmartPoller utility   | ~4 hours |   Low  |   High   |
-| GenerateFlow refactor | ~3 hours |   Low  |   High   |
-| flowStore updates     | ~1 hour  |   Low  |  Medium  |
-| Unit tests            | ~3 hours |   Low  |   High   |
-| Integration tests     | ~2 hours | Medium |   High   |
+| Component             | Effort   | Risk   | Priority |
+| --------------------- | -------- | ------ | -------- |
+| SmartPoller utility   | ~4 hours | Low    | High     |
+| GenerateFlow refactor | ~3 hours | Low    | High     |
+| flowStore updates     | ~1 hour  | Low    | Medium   |
+| Unit tests            | ~3 hours | Low    | High     |
+| Integration tests     | ~2 hours | Medium | High     |
 
 **Total**: ~13 hours engineering effort
 
@@ -162,7 +164,7 @@ class SmartPoller {
   }
 
   /**
-   * Calculate polling interval based on remaining ETA
+   * Adjust polling interval based on remaining ETA
    * Returns interval in milliseconds
    *
    * Interval strategy:
@@ -176,14 +178,14 @@ class SmartPoller {
    *
    * @example
    * const poller = new SmartPoller();
-   * poller.calculateInterval(30); // Returns 10000 (10 seconds)
-   * poller.calculateInterval(15); // Returns 5000 (5 seconds)
-   * poller.calculateInterval(8);  // Returns 2000 (2 seconds)
-   * poller.calculateInterval(3);  // Returns 500 (500ms)
+   * poller.adjustInterval(30); // Returns 10000 (10 seconds)
+   * poller.adjustInterval(15); // Returns 5000 (5 seconds)
+   * poller.adjustInterval(8);  // Returns 2000 (2 seconds)
+   * poller.adjustInterval(3);  // Returns 500 (500ms)
    */
-  calculateInterval(etaSeconds) {
+  adjustInterval(etaSeconds) {
     // Validate input
-    if (typeof etaSeconds !== 'number' || etaSeconds < 0) {
+    if (typeof etaSeconds !== "number" || etaSeconds < 0) {
       console.warn(
         `SmartPoller: Invalid ETA value ${etaSeconds}, returning default 2000ms`
       );
@@ -262,17 +264,20 @@ export default SmartPoller;
 ### Key Design Decisions
 
 **Why these intervals?**
+
 - 10s (high ETA): Reduces early-stage load by 80% vs 2s baseline
 - 5s (medium ETA): Balances between efficiency and responsiveness
 - 2s (low ETA): Maintains responsiveness as job nears completion
 - 500ms (critical ETA): Final push for real-time updates
 
 **Why 80% wait factor?**
+
 - From ARCHITECTURE_ROADMAP_EXECUTIVE.md: "wait 80% of ETA, then rapid-fire"
 - Allows initial infrastructure setup without polling load
 - 20% polling phase captures final updates reliably
 
 **Why configurable?**
+
 - Different job types may have different characteristics
 - Allows tuning based on performance observations
 - Can be disabled for testing or special cases
@@ -286,6 +291,7 @@ export default SmartPoller;
 **Current Implementation (lines 207-280)**:
 
 The current `pollUntilComplete()` function uses hardcoded `POLL_INTERVAL_MS = 2000`. We need to:
+
 1. Import SmartPoller
 2. Create instance at function start
 3. Replace hardcoded interval with calculated interval
@@ -345,21 +351,22 @@ async function pollUntilComplete(resultId) {
           const waitDurationMs = smartPoller.getInitialWaitDuration(status.eta);
           if (waitDurationMs) {
             console.log(
-              `[SmartPoller] Waiting ${smartPoller.getIntervalDescription(waitDurationMs)} ` +
-              `before first poll (80% of ETA: ${status.eta}s)`
+              `[SmartPoller] Waiting ${smartPoller.getIntervalDescription(
+                waitDurationMs
+              )} ` + `before first poll (80% of ETA: ${status.eta}s)`
             );
 
             flowStore.updateProgress({
               status: "waiting",
-              message: `Waiting ${smartPoller.getIntervalDescription(waitDurationMs)} before polling...`,
+              message: `Waiting ${smartPoller.getIntervalDescription(
+                waitDurationMs
+              )} before polling...`,
               progress_percent: 5,
               eta: status.eta,
             });
 
             // Wait before starting polls
-            await new Promise((resolve) =>
-              setTimeout(resolve, waitDurationMs)
-            );
+            await new Promise((resolve) => setTimeout(resolve, waitDurationMs));
 
             smartPoller.startPolling();
           }
@@ -390,8 +397,8 @@ async function pollUntilComplete(resultId) {
           return;
         }
 
-        // ✅ NEW: Calculate adaptive interval based on current ETA
-        let pollIntervalMs = smartPoller.calculateInterval(currentEta || 30);
+        // ✅ NEW: Adjust adaptive interval based on current ETA
+        let pollIntervalMs = smartPoller.adjustInterval(currentEta || 30);
 
         // Safety check: ensure we don't exceed total time limit
         const elapsedMs = Date.now() - pollingStartTime;
@@ -403,13 +410,11 @@ async function pollUntilComplete(resultId) {
         // Log interval for debugging (comment out in production if noisy)
         console.debug(
           `[SmartPoller] Poll ${attempt + 1}: ETA=${currentEta}s, ` +
-          `Interval=${smartPoller.getIntervalDescription(pollIntervalMs)}`
+            `Interval=${smartPoller.getIntervalDescription(pollIntervalMs)}`
         );
 
         // ✅ CHANGED: Use calculated interval instead of hardcoded
-        await new Promise((resolve) =>
-          setTimeout(resolve, pollIntervalMs)
-        );
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       } catch (pollErr) {
         console.warn(`Poll attempt ${attempt + 1} failed:`, pollErr.message);
 
@@ -421,14 +426,16 @@ async function pollUntilComplete(resultId) {
         ) {
           if (attempt < MAX_ATTEMPTS - 1) {
             // Use adaptive interval even for retries
-            const retryIntervalMs = currentEta 
-              ? smartPoller.calculateInterval(currentEta) 
+            const retryIntervalMs = currentEta
+              ? smartPoller.adjustInterval(currentEta)
               : 2000;
-            
+
             console.log(
-              `[SmartPoller] Retrying in ${smartPoller.getIntervalDescription(retryIntervalMs)}`
+              `[SmartPoller] Retrying in ${smartPoller.getIntervalDescription(
+                retryIntervalMs
+              )}`
             );
-            
+
             await new Promise((resolve) =>
               setTimeout(resolve, retryIntervalMs)
             );
@@ -443,7 +450,7 @@ async function pollUntilComplete(resultId) {
     // Max attempts reached
     throw new Error(
       `Polling timeout after ${MAX_ATTEMPTS} attempts (` +
-      `${(MAX_ATTEMPTS * 2000) / 1000 / 60} minutes)`
+        `${(MAX_ATTEMPTS * 2000) / 1000 / 60} minutes)`
     );
   } catch (err) {
     flowStore.setError(err);
@@ -455,14 +462,14 @@ async function pollUntilComplete(resultId) {
 
 ### Changes Made
 
-|         Change         | Before | After | Reason |
-|------------------------|--------|-------|--------|
-| **SmartPoller import** | None | Added at top | Required for calculation |
-| **Initialization**     | N/A | In function body | Per-job instance |
-| **Initial wait**       | None | 80% of first ETA | Pattern 5 spec |
-| **Interval source**    | Constant 2000ms | `calculateInterval(eta)` | Adaptive strategy |
-| **Logging**            | Minimal | Enhanced with SmartPoller | Debugging support |
-| **Retry interval**     | Constant 2000ms | Adaptive calculation | Consistent strategy |
+| Change                 | Before          | After                     | Reason                   |
+| ---------------------- | --------------- | ------------------------- | ------------------------ |
+| **SmartPoller import** | None            | Added at top              | Required for calculation |
+| **Initialization**     | N/A             | In function body          | Per-job instance         |
+| **Initial wait**       | None            | 80% of first ETA          | Pattern 5 spec           |
+| **Interval source**    | Constant 2000ms | `adjustInterval(eta)`     | Adaptive strategy        |
+| **Logging**            | Minimal         | Enhanced with SmartPoller | Debugging support        |
+| **Retry interval**     | Constant 2000ms | Adaptive calculation      | Consistent strategy      |
 
 ### Import Statement
 
@@ -485,7 +492,7 @@ import SmartPoller from "../lib/SmartPoller.js";
 ```javascript
 {
   // ... existing properties ...
-  
+
   // Polling configuration (NEW)
   pollingConfig: {
     initialEta: null,           // Initial ETA from first status poll
@@ -595,37 +602,37 @@ describe("SmartPoller", () => {
     poller = new SmartPoller();
   });
 
-  describe("calculateInterval", () => {
+  describe("adjustInterval", () => {
     it("should return 10s interval for high ETA (>30s)", () => {
-      const interval = poller.calculateInterval(40);
+      const interval = poller.adjustInterval(40);
       expect(interval).toBe(10000);
     });
 
     it("should return 5s interval for medium ETA (15-30s)", () => {
-      const interval = poller.calculateInterval(20);
+      const interval = poller.adjustInterval(20);
       expect(interval).toBe(5000);
     });
 
     it("should return 2s interval for low ETA (5-15s)", () => {
-      const interval = poller.calculateInterval(10);
+      const interval = poller.adjustInterval(10);
       expect(interval).toBe(2000);
     });
 
     it("should return 500ms interval for critical ETA (<5s)", () => {
-      const interval = poller.calculateInterval(3);
+      const interval = poller.adjustInterval(3);
       expect(interval).toBe(500);
     });
 
     it("should handle boundary conditions", () => {
-      expect(poller.calculateInterval(30)).toBe(5000); // Medium
-      expect(poller.calculateInterval(15)).toBe(2000); // Low
-      expect(poller.calculateInterval(5)).toBe(500);   // Critical
+      expect(poller.adjustInterval(30)).toBe(5000); // Medium
+      expect(poller.adjustInterval(15)).toBe(2000); // Low
+      expect(poller.adjustInterval(5)).toBe(500); // Critical
     });
 
     it("should handle invalid input gracefully", () => {
-      expect(poller.calculateInterval(-5)).toBe(2000); // Default
-      expect(poller.calculateInterval("invalid")).toBe(2000); // Default
-      expect(poller.calculateInterval(null)).toBe(2000); // Default
+      expect(poller.adjustInterval(-5)).toBe(2000); // Default
+      expect(poller.adjustInterval("invalid")).toBe(2000); // Default
+      expect(poller.adjustInterval(null)).toBe(2000); // Default
     });
   });
 
@@ -674,8 +681,8 @@ describe("SmartPoller", () => {
         lowEtaThreshold: 10,
       });
 
-      expect(custom.calculateInterval(50)).toBe(5000); // Medium (was high)
-      expect(custom.calculateInterval(20)).toBe(2000); // Low (was medium)
+      expect(custom.adjustInterval(50)).toBe(5000); // Medium (was high)
+      expect(custom.adjustInterval(20)).toBe(2000); // Low (was medium)
     });
 
     it("should accept custom intervals", () => {
@@ -684,8 +691,8 @@ describe("SmartPoller", () => {
         mediumEtaInterval: 10000,
       });
 
-      expect(custom.calculateInterval(40)).toBe(20000);
-      expect(custom.calculateInterval(20)).toBe(10000);
+      expect(custom.adjustInterval(40)).toBe(20000);
+      expect(custom.adjustInterval(20)).toBe(10000);
     });
   });
 
@@ -761,16 +768,19 @@ describe("Polling Integration", () => {
 Before merging, manually verify:
 
 1. **Console Logs**
+
    - ✅ See `[SmartPoller]` debug logs during polling
    - ✅ Interval changes as ETA decreases
    - ✅ Initial wait message appears
 
 2. **Timing**
+
    - ✅ Generate 30-second job, watch interval decrease: 10s → 5s → 2s → 500ms
    - ✅ Generate 10-second job, watch immediate 2s polling
    - ✅ Initial wait approximately 80% of first ETA
 
 3. **Functionality**
+
    - ✅ Jobs still complete successfully
    - ✅ Progress updates appear in UI
    - ✅ No timeout errors on long jobs
@@ -795,7 +805,7 @@ Before merging, manually verify:
 
 ### Functional Validation
 
-- [ ] SmartPoller.calculateInterval() returns correct intervals for all ETA ranges
+- [ ] SmartPoller.adjustInterval() returns correct intervals for all ETA ranges
 - [ ] SmartPoller.getInitialWaitDuration() returns 80% of ETA
 - [ ] Initial wait phase implemented and working
 - [ ] Polling loop uses calculated intervals, not hardcoded 2000ms
@@ -834,9 +844,10 @@ Before merging, manually verify:
 Change console.debug to console.log in pollUntilComplete():
 
 ```javascript
-console.log( // Changed from console.debug
+console.log(
+  // Changed from console.debug
   `[SmartPoller] Poll ${attempt + 1}: ETA=${currentEta}s, ` +
-  `Interval=${smartPoller.getIntervalDescription(pollIntervalMs)}`
+    `Interval=${smartPoller.getIntervalDescription(pollIntervalMs)}`
 );
 ```
 
@@ -857,7 +868,9 @@ window.smartPoller.getConfig(); // See full configuration
 ```javascript
 // In browser console
 import { flowStore } from "./stores/flowStore.js";
-flowStore.subscribe(store => console.log("Polling config:", store.pollingConfig));
+flowStore.subscribe((store) =>
+  console.log("Polling config:", store.pollingConfig)
+);
 ```
 
 ### Simulate Long Job
@@ -899,6 +912,7 @@ git checkout -b feat/adaptive-polling
 Merge to `feat/conform-01+02-fix` (feature branch), then eventually to `main`.
 
 **Pre-Merge Verification**:
+
 ```bash
 npm run test           # All tests pass
 npm run lint           # No linting errors
@@ -923,4 +937,3 @@ This implementation aligns with:
 **Effort Estimate**: 13 hours  
 **Risk Level**: Low  
 **Next Phase**: Code review after initial implementation
-
