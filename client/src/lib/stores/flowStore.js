@@ -176,13 +176,13 @@ function createFlowStore() {
 
     /**
      * Update polling progress (called during POLLING state)
-     * @param {Object} progressData - {percent, message, eta, calls_completed, calls_total}
+     * @param {Object} progressData - {progress_percent, message, eta, calls_completed, calls_total}
      */
     updateProgress(progressData) {
       update((store) => ({
         ...store,
         currentProgressPercent:
-          progressData.percent ?? store.currentProgressPercent,
+          progressData.progress_percent ?? store.currentProgressPercent,
         currentMessage: progressData.message ?? store.currentMessage,
         currentEta: progressData.eta ?? store.currentEta,
         calls_completed: progressData.calls_completed ?? store.calls_completed,
